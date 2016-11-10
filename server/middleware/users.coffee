@@ -77,7 +77,9 @@ module.exports =
       throw new errors.UnprocessableEntity('User not found')
     unless req.params.verificationCode is user.verificationCode(timestamp)
       throw new errors.UnprocessableEntity('Verification code does not match')
-    yield User.update({ _id: user.id }, { emailVerified: true })
+    yield user.update({ emailVerified: true })
+    user.set({ emailVerified: true })
+    yield user.updateMailChimp()
     res.status(200).send({ role: user.get('role') })
     
   fetchMailChimpInfo: wrap (req, res) ->

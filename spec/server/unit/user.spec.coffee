@@ -56,13 +56,32 @@ describe 'User', ->
     done()
 
   describe '.updateServiceSettings()', ->
-    makeMC = (callback) ->
-
     it 'uses emails to determine what to send to MailChimp', ->
       user = new User({emailSubscriptions: ['announcement'], email: 'tester@gmail.com'})
       spyOn(user, 'updateMailChimp').and.returnValue(Promise.resolve())
-      User.updateServiceSettings(user)
+      user.updateServiceSettings()
       expect(user.updateMailChimp).toHaveBeenCalled()
+
+    it 'updates stripe email iff email changes on save', utils.wrap (done) ->
+      stripeApi = require('../../../server/lib/stripe_utils').api
+      spyOn(stripeApi.customers, 'update')
+      user = new User({email: 'first@email.com'})
+      yield user.save()
+      user = yield User.findById(user.id)
+      user.set({email: 'second@email.com'})
+      yield user.updateServiceSettings()
+      user.set({stripe: {customerID: '1234'}})
+      yield user.updateServiceSettings()
+      expect(stripeApi.customers.update.calls.count()).toBe(0)
+      user.set({email: 'third@email.com'})
+      yield user.updateServiceSettings()
+      expect(stripeApi.customers.update.calls.count()).toBe(1)
+      user.set({email: 'first@email.com'})
+      yield user.updateServiceSettings()
+      expect(stripeApi.customers.update.calls.count()).toBe(2)
+      yield user.updateServiceSettings()
+      expect(stripeApi.customers.update.calls.count()).toBe(2)
+      done()
 
   describe '.isAdmin()', ->
     it 'returns true if user has "admin" permission', (done) ->
@@ -130,6 +149,7 @@ describe 'User', ->
         lastName: 'Last'
         emails: {
           diplomatNews: { enabled: true }
+          generalNews: { enabled: true }
         }
       })
       spyOn(mailChimp.api, 'put').and.returnValue(Promise.resolve())
@@ -139,11 +159,12 @@ describe 'User', ->
       expect(args[0]).toMatch("^/lists/[0-9a-f]+/members/[0-9a-f]+$")
       expect(args[1].email_address).toBe(user.get('email'))
       diplomatInterest = _.find(mailChimp.interests, (interest) -> interest.property is 'diplomatNews')
+      announcementsInterest = _.find(mailChimp.interests, (interest) -> interest.property is 'generalNews')
       for [key, value] in _.pairs(args[1].interests)
-        if key is diplomatInterest.mailChimpId
+        if key in [diplomatInterest.mailChimpId, announcementsInterest.mailChimpId]
           expect(value).toBe(true)
         else
-          expect(value).toBe(false)
+          expect(value).toBeFalsy()
       expect(args[1].status).toBe('subscribed')
       expect(args[1].merge_fields['FNAME']).toBe('First')
       expect(args[1].merge_fields['LNAME']).toBe('Last')
@@ -199,7 +220,7 @@ describe 'User', ->
         user = yield utils.initUser({
           emailVerified: true
           emails: {
-            
+            generalNews: { enabled: false }
           }
         })
         spyOn(mailChimp.api, 'get')

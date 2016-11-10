@@ -15,7 +15,7 @@ core_utils = require '../../app/core/utils'
 mailChimp = require '../lib/mail-chimp'
 
 config = require '../../server_config'
-stripe = require('stripe')(config.stripe.secretKey)
+stripe = require('../lib/stripe_utils').api
 
 sendwithus = require '../sendwithus'
 
@@ -43,10 +43,6 @@ UserSchema.index({'country': 1}, {name: 'country index', sparse: true})
 UserSchema.index({'role': 1}, {name: 'role index', sparse: true})
 UserSchema.index({'coursePrepaid._id': 1}, {name: 'course prepaid id index', sparse: true})
 UserSchema.index({'oAuthIdentities.provider': 1, 'oAuthIdentities.id': 1}, {name: 'oauth identities index', unique: true, sparse: true})
-
-UserSchema.post('init', ->
-  @set('anonymous', false) if @get('email')
-)
 
 UserSchema.methods.broadName = ->
   return '(deleted)' if @get('deleted')
@@ -157,8 +153,6 @@ UserSchema.methods.setEmailSubscription = (newName, enabled) ->
   newSubs[newName] ?= {}
   newSubs[newName].enabled = enabled
   @set('emails', newSubs)
-  newsGroups = _.pluck(mailChimp.interests, 'property')
-  @newsSubsChanged = true if newName in newsGroups
 
 UserSchema.methods.gems = ->
   gemsEarned = @get('earned')?.gems ? 0
@@ -175,34 +169,24 @@ UserSchema.methods.isEmailSubscriptionEnabled = (newName) ->
     return oldName and oldName in oldSubs if oldSubs
   emails ?= {}
   _.defaults emails, _.cloneDeep(jsonschema.properties.emails.default)
-  return emails[newName]?.enabled?
+  return emails[newName]?.enabled
 
-UserSchema.statics.updateServiceSettings = (doc, callback) ->
-  return callback?() unless isProduction or GLOBAL.testing
-  return callback?() if doc.updatedMailChimp
-  return callback?() unless doc.get('email')
-  return callback?() unless doc.get('dateCreated')
-  accountAgeMinutes = (new Date().getTime() - doc.get('dateCreated').getTime?() ? 0) / 1000 / 60
-  return callback?() unless accountAgeMinutes > 30 or GLOBAL.testing
-  existingProps = doc.get('mailChimp')
-  emailChanged = (not existingProps) or existingProps?.email isnt doc.get('email')
+UserSchema.methods.updateServiceSettings = co.wrap ->
+  return unless isProduction or GLOBAL.testing
+  return if @updatedMailChimp
+  emailChanged = @originalEmail isnt @get('email')
 
-  if emailChanged and customerID = doc.get('stripe')?.customerID
+  if emailChanged and customerID = @get('stripe')?.customerID
     unless stripe?.customers
       console.error('Oh my god, Stripe is not imported correctly-how could we have done this (again)?')
-    stripe?.customers?.update customerID, {email:doc.get('email')}, (err, customer) ->
+    stripe?.customers?.update customerID, {email:@get('email')}, (err, customer) ->
       console.error('Error updating stripe customer...', err) if err
 
-  return callback?() unless emailChanged or doc.newsSubsChanged
-  doc.updateMailChimp()
-  .then(->
-    callback?()
-  )
-  .catch((e) ->
-    console.log(e.stack)
-    console.log(e.errors)
-    callback?()
-  )
+  newsSubsChanged = not _.isEqual(@get('emails'), @startingEmails)
+  if emailChanged or newsSubsChanged
+    yield @updateMailChimp()
+    
+  @originalEmail = @get('email')
 
 UserSchema.methods.updateMailChimp = co.wrap ->
   
@@ -253,7 +237,7 @@ UserSchema.methods.updateMailChimp = co.wrap ->
       FNAME: @get('firstName')
       LNAME: @get('lastName')
   }
-  response = yield mailChimp.api.put(mailChimp.makeSubscriberUrl(email), body)
+  yield mailChimp.api.put(mailChimp.makeSubscriberUrl(email), body)
   yield @update({$set: {mailChimp: {email}}})
   
   # PUT the user to MailChimp, updating state and interests (groups)
@@ -476,15 +460,15 @@ UserSchema.pre('save', (next) ->
   next()
 )
 
-UserSchema.post 'save', (doc) ->
-  newsGroups = _.pluck(mailChimp.interests, 'property')
-  doc.newsSubsChanged = not _.isEqual(_.pick(doc.get('emails'), newsGroups), _.pick(doc.startingEmails, newsGroups))
-  UserSchema.statics.updateServiceSettings(doc)
+UserSchema.post 'save', ->
+  @updateServiceSettings()
 
   
-UserSchema.post 'init', (doc) ->
-  doc.wasTeacher = doc.isTeacher()
-  doc.startingEmails = _.cloneDeep(doc.get('emails'))
+UserSchema.post 'init', ->
+  @set('anonymous', false) if @get('email')
+  @originalEmail = @get('email')
+  @wasTeacher = @isTeacher()
+  @startingEmails = _.cloneDeep(@get('emails'))
   if @get('coursePrepaidID') and not @get('coursePrepaid')
     Prepaid = require './Prepaid'
     @set('coursePrepaid', {

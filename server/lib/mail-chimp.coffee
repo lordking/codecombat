@@ -5,8 +5,19 @@ api = new MailChimp(config.mail.mailchimpAPIKey or '0000000000000000000000000000
 MAILCHIMP_LIST_ID = 'e9851239eb'
 MAILCHIMP_GROUP_ID = '4529'
 
-# These three need to be parallel
+# Need mailChimpId when communicating TO MailChimp with the API, and mailChimpLabel 
+# when receiving communication FROM MailChimp through the WebHook.
 interests = [
+  {
+    "mailChimpLabel": "Announcements",
+    "property": "generalNews",
+    "mailChimpId": "363e59637c"
+  },
+  {
+    "mailChimpLabel": "Adventurers",
+    "property": "adventurerNews",
+    "mailChimpId": "5ad1678251"
+  },
   {
     "mailChimpLabel": "Artisans",
     "property": "artisanNews",
