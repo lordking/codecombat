@@ -82,20 +82,6 @@ module.exports =
     yield user.updateMailChimp()
     res.status(200).send({ role: user.get('role') })
     
-  fetchMailChimpInfo: wrap (req, res) ->
-    { api: newAPI, MAILCHIMP_LIST_ID } = require('../lib/mail-chimp')
-    oldAPI = mc
-    newAPIResponse = yield newAPI.get("/lists/#{MAILCHIMP_LIST_ID}/members/#{subscriberHash}")
-    oldAPIResponse = yield new Promise((resolve, reject) ->
-      oldAPI.lists.memberInfo(
-        { id: MAILCHIMP_LIST_ID, emails: [{email: req.user.get('email')}] },
-        resolve,
-        reject
-      )
-    )
-    interestCategories = yield newAPI.get("/lists/#{MAILCHIMP_LIST_ID}/interest-categories/810c02bada/interests")
-    res.send({newAPIResponse, oldAPIResponse})
-
   resetEmailVerifiedFlag: wrap (req, res, next) ->
     newEmail = req.body.email
     _id = mongoose.Types.ObjectId(req.body._id)
