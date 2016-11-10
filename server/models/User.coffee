@@ -171,22 +171,21 @@ UserSchema.methods.isEmailSubscriptionEnabled = (newName) ->
   _.defaults emails, _.cloneDeep(jsonschema.properties.emails.default)
   return emails[newName]?.enabled
 
+UserSchema.methods.emailChanged = -> @originalEmail isnt @get('emailLower') 
+  
 UserSchema.methods.updateServiceSettings = co.wrap ->
   return unless isProduction or GLOBAL.testing
   return if @updatedMailChimp
-  emailChanged = @originalEmail isnt @get('email')
-
-  if emailChanged and customerID = @get('stripe')?.customerID
+  if @emailChanged() and customerID = @get('stripe')?.customerID
     unless stripe?.customers
       console.error('Oh my god, Stripe is not imported correctly-how could we have done this (again)?')
     stripe?.customers?.update customerID, {email:@get('email')}, (err, customer) ->
       console.error('Error updating stripe customer...', err) if err
 
   newsSubsChanged = not _.isEqual(@get('emails'), @startingEmails)
-  if emailChanged or newsSubsChanged
+  if @emailChanged() or newsSubsChanged
     yield @updateMailChimp()
     
-  @originalEmail = @get('email')
 
 UserSchema.methods.updateMailChimp = co.wrap ->
   
@@ -203,7 +202,7 @@ UserSchema.methods.updateMailChimp = co.wrap ->
   return unless mailChimpEmail or anyInterests
 
   # if user's email does not match their mailChimp email, unsubscribe the old email
-  if mailChimpEmail and mailChimpEmail isnt @get('email')
+  if mailChimpEmail and mailChimpEmail isnt @get('emailLower')
     body = {
       email_address: mailChimpEmail
       status: 'unsubscribed'
@@ -213,7 +212,7 @@ UserSchema.methods.updateMailChimp = co.wrap ->
     mailChimpEmail = null # from here on, have logic treat this as a new subscriber addition
 
   # need an email to subscribe!
-  email = @get('email')
+  email = @get('emailLower')
   return unless email
 
   # check if email is verified here or there 
@@ -459,13 +458,16 @@ UserSchema.pre('save', (next) ->
   next()
 )
 
-UserSchema.post 'save', ->
-  @updateServiceSettings()
+UserSchema.post 'save', co.wrap ->
+  try
+    yield @updateServiceSettings()
+  catch e
+    console.error 'User Post Save Error:', e.stack
 
   
 UserSchema.post 'init', ->
   @set('anonymous', false) if @get('email')
-  @originalEmail = @get('email')
+  @originalEmail = @get('emailLower')
   @wasTeacher = @isTeacher()
   @startingEmails = _.cloneDeep(@get('emails'))
   if @get('coursePrepaidID') and not @get('coursePrepaid')

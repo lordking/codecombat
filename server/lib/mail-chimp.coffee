@@ -2,6 +2,13 @@ config = require '../../server_config'
 MailChimp = require('mailchimp-api-v3')
 api = new MailChimp(config.mail.mailchimpAPIKey or '00000000000000000000000000000000-us1')
 
+if GLOBAL.testing
+  api = {
+    put: -> Promise.resolve()
+    get: -> Promise.resolve({ status: 'subscribed' }) 
+  }
+  
+
 MAILCHIMP_LIST_ID = 'e9851239eb'
 MAILCHIMP_GROUP_ID = '4529'
 

@@ -59,7 +59,7 @@ describe 'User', ->
     it 'uses emails to determine what to send to MailChimp', ->
       user = new User({emailSubscriptions: ['announcement'], email: 'tester@gmail.com'})
       spyOn(user, 'updateMailChimp').and.returnValue(Promise.resolve())
-      user.updateServiceSettings()
+      yield user.updateServiceSettings()
       expect(user.updateMailChimp).toHaveBeenCalled()
 
     it 'updates stripe email iff email changes on save', utils.wrap (done) ->
@@ -67,19 +67,28 @@ describe 'User', ->
       spyOn(stripeApi.customers, 'update')
       user = new User({email: 'first@email.com'})
       yield user.save()
+      
       user = yield User.findById(user.id)
       user.set({email: 'second@email.com'})
-      yield user.updateServiceSettings()
+      yield user.save()
+      
+      user = yield User.findById(user.id)
       user.set({stripe: {customerID: '1234'}})
-      yield user.updateServiceSettings()
+      yield user.save()
       expect(stripeApi.customers.update.calls.count()).toBe(0)
+      
+      user = yield User.findById(user.id)
       user.set({email: 'third@email.com'})
-      yield user.updateServiceSettings()
+      yield user.save()
       expect(stripeApi.customers.update.calls.count()).toBe(1)
+      
+      user = yield User.findById(user.id)
       user.set({email: 'first@email.com'})
-      yield user.updateServiceSettings()
+      yield user.save()
       expect(stripeApi.customers.update.calls.count()).toBe(2)
-      yield user.updateServiceSettings()
+      
+      user = yield User.findById(user.id)
+      yield user.save()
       expect(stripeApi.customers.update.calls.count()).toBe(2)
       done()
 
@@ -184,6 +193,7 @@ describe 'User', ->
           }
           mailChimp: { email }
         })
+        user = yield User.findById(user.id)
         spyOn(mailChimp.api, 'get').and.returnValue(Promise.resolve({ status: 'subscribed' }))
         spyOn(mailChimp.api, 'put').and.returnValue(Promise.resolve())
         yield user.updateMailChimp()
