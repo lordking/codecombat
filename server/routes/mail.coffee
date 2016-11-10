@@ -743,6 +743,7 @@ module.exports.sendNextStepsEmail = sendNextStepsEmail = (user, now, daysAgo) ->
 
 ### End Next Steps Email ###
 
+# TODO: Update webhooks!
 handleMailchimpWebHook = (req, res) ->
   post = req.body
 
@@ -772,7 +773,6 @@ module.exports.handleProfileUpdate = handleProfileUpdate = (user, post) ->
   mailchimpSubs = post.data.merges.INTERESTS.split(', ')
 
   for interest in mailChimp.interests
-    console.log 'interest in mailchimp subs', interest.mailChimpLabel, interest, mailchimpSubs, interest.mailChimpLabel in mailchimpSubs
     user.setEmailSubscription interest.property, interest.mailChimpLabel in mailchimpSubs
 
   fname = post.data.merges.FNAME
@@ -788,5 +788,4 @@ module.exports.handleProfileUpdate = handleProfileUpdate = (user, post) ->
 module.exports.handleUnsubscribe = handleUnsubscribe = (user) ->
   user.set 'emailSubscriptions', []
   for interest in mailChimp.interests
-    console.log 'set', interest.property, 'to false'
     user.setEmailSubscription interest.property, false
