@@ -240,8 +240,7 @@ UserSchema.methods.updateMailChimp = co.wrap ->
   yield mailChimp.api.put(mailChimp.makeSubscriberUrl(email), body)
   yield @update({$set: {mailChimp: {email}}})
   
-  # PUT the user to MailChimp, updating state and interests (groups)
-    
+
 UserSchema.statics.statsMapping =
   edits:
     article: 'stats.articleEdits'
