@@ -160,6 +160,7 @@ module.exports = class LevelLoadingView extends CocoView
   resize: ->
     maxHeight = $('#page-container').outerHeight(true)
     minHeight = $('#code-area').outerHeight(true)
+    minHeight -= 20
     @$el.css height: maxHeight
     @$loadingDetails.css minHeight: minHeight, maxHeight: maxHeight
     if @intro

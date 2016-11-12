@@ -45,6 +45,7 @@ ContactModal = require 'views/core/ContactModal'
 HintsView = require './HintsView'
 HintsState = require './HintsState'
 WebSurfaceView = require './WebSurfaceView'
+SpellPaletteView = require './tome/SpellPaletteView'
 
 PROFILE_ME = false
 
@@ -278,6 +279,13 @@ module.exports = class PlayLevelView extends RootView
     @level.set 'goals', goals
     @goalManager.destroy()
     @initGoalManager()
+
+  updateSpellPalette: (thang, spell) ->
+    return unless thang and @spellPaletteView?.thang isnt thang and (thang.programmableProperties or thang.apiProperties or thang.programmableHTMLProperties)
+    useHero = /hero/.test(spell.getSource()) or not /(self[\.\:]|this\.|\@)/.test(spell.getSource())
+    @spellPaletteView = @insertSubView new SpellPaletteView { thang, @supermodel, programmable: spell?.canRead(), language: spell?.language ? @session.get('codeLanguage'), session: @session, level: @level, courseID: @courseID, courseInstanceID: @courseInstanceID, useHero }
+    #@spellPaletteView.toggleControls {}, spell.view.controlsEnabled if spell?.view   # TODO: know when palette should have been disabled but didn't exist
+
 
   insertSubviews: ->
     @hintsState = new HintsState({ hidden: true }, { @session, @level })
