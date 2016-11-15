@@ -189,6 +189,7 @@ UserSchema.methods.updateServiceSettings = co.wrap ->
 
 UserSchema.methods.updateMailChimp = co.wrap ->
   
+  console.log '1'
   # construct interests object for MailChimp
   interests = {}
   for interest in mailChimp.interests
@@ -238,6 +239,7 @@ UserSchema.methods.updateMailChimp = co.wrap ->
   }
   yield mailChimp.api.put(mailChimp.makeSubscriberUrl(email), body)
   yield @update({$set: {mailChimp: {email}}})
+  console.log '2'
   
 
 UserSchema.statics.statsMapping =

@@ -67,3 +67,67 @@ describe 'sendNextStepsEmail', ->
 
     mail.sendNextStepsEmail(user, new Date, 5)
   .pend('Breaks other tests — must be run alone')
+
+fdescribe 'POST /mail/webhook', ->
+  beforeEach utils.wrap (done) ->
+    yield utils.clearModels([User])
+    @email = 'some@email.com'
+    @leid = 'german song?'
+    @user = yield utils.initUser({
+      @email
+      emailVerified: true
+      emails: {
+        generalNews: { enabled: false }
+        diplomatNews: { enabled: true }
+      }
+    })
+    yield new Promise((resolve) -> setTimeout(resolve, 100))
+    yield @user.update({$set: { mailChimp: { @leid, @email }}}) # hacky way to get around triggering post save
+    user = yield User.findById(@user.id)
+    @url = utils.getURL('/mail/webhook')
+    done()
+  
+  describe 'when getting messages of type "profile"', ->
+    json = {
+      type: 'profile'
+      data: {
+        web_id: @leid
+        @email
+        merges: {
+          INTERESTS: 'Announcements, Adventurers, Artisans, Archmages'
+          LNAME: 'Smith'
+          FNAME: 'John'
+        }
+      }
+    }
+    
+    it 'updates the user with new profile data', utils.wrap (done) ->
+      [res, body] = yield request.postAsync({ @url, json })
+      user = yield User.findById(@user.id)
+      expect(user.get('emails.diplomatNews')).toBe(false)
+      expect(user.get('emails.generalNews')).toBe(true)
+      expect(user.get('emails.artisanNews')).toBe(true)
+      expect(user.get('emails.archmageNews')).toBe(true)
+      done()
+      
+    it 'does not work if the user on our side is unverified', utils.wrap (done) ->
+      # TODO
+      done()
+    
+#  describe 'when getting messages of type "unsubscribe" or "upemail"', ->
+#    it 'unsets the mailchimp info from the user', ->
+#      json = {
+#        type: 'unsubscribe'
+#        data: {
+#          web_id: @leid
+#          @email
+#        }
+#      }
+#
+#      json = {
+#        type: 'upemail'
+#        data: {
+#          old_email: @email
+#          new_email: 'some-new@email.com'
+#        }
+#      }
